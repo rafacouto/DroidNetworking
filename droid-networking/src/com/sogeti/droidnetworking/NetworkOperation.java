@@ -45,7 +45,9 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.entity.HttpEntityWrapper;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONObject;
 
 import com.sogeti.droidnetworking.NetworkEngine.HttpMethod;
 import com.sogeti.droidnetworking.external.Base64;
@@ -56,12 +58,16 @@ import android.os.Handler;
 import android.os.Message;
 
 public class NetworkOperation implements Runnable {
+	
     public static final int STATUS_COMPLETED = 0;
     public static final int STATUS_ERROR = 1;
     public static final int STATUS_CANCELLED = 2;
     public static final int STATUS_PENDING = 3;
     public static final int STATUS_EXECUTING = 4;
     public static final int STATUS_TIMEOUT = 5;
+    
+    public static String CONTENT_TYPE_FORM_URLENCODED = "application/x-www-form-urlencoded";
+    public static String CONTENT_TYPE_JSON = "application/json";    
 
     private static final String LAST_MODIFIED = "Last-Modified";
     private static final String ETAG = "ETag";
@@ -87,6 +93,7 @@ public class NetworkOperation implements Runnable {
     private CacheHandler cacheHandler;
     private boolean fresh = false;
     private int status;
+    private JSONObject json;
 
     public interface ResponseParser {
         void parse(final InputStream is, final long size) throws IOException;
@@ -103,15 +110,21 @@ public class NetworkOperation implements Runnable {
     }
 
     public NetworkOperation() {
-        this(null, null, null);
+        this(null, (Map<String, String>)null, null);
     }
 
+    public NetworkOperation(final String urlString, final JSONObject json, final HttpMethod httpMethod) {
+    	this(urlString, (Map<String, String>)null, httpMethod);
+    	this.json = json;
+    }
+    
     public NetworkOperation(final String urlString, final Map<String, String> params, final HttpMethod httpMethod) {
         this.urlString = urlString;
         this.httpMethod = httpMethod;
         this.params = new HashMap<String, String>();
         this.headers = new HashMap<String, String>();
         this.cacheHeaders = new HashMap<String, String>();
+        this.json = null;
 
         status = STATUS_PENDING;
 
@@ -145,21 +158,37 @@ public class NetworkOperation implements Runnable {
                 break;
         }
 
-        if (httpMethod == HttpMethod.POST || httpMethod == HttpMethod.PUT) {
-            List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
-
-            for (String param : params.keySet()) {
-                nameValuePairs.add(new BasicNameValuePair(param, params.get(param)));
-            }
-
+        if (httpMethod == HttpMethod.POST || httpMethod == HttpMethod.PUT) {        	
+                        
+            HttpEntity entity;
+            
             try {
-                if (httpMethod == HttpMethod.POST) {
-                    ((HttpPost) request).setEntity(new UrlEncodedFormEntity(nameValuePairs));
-                } else {
-                    ((HttpPut) request).setEntity(new UrlEncodedFormEntity(nameValuePairs));
-                }
+            	
+	            if (json == null) {	
+	            	
+	            	List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+		            for (String param : params.keySet()) {
+		                nameValuePairs.add(new BasicNameValuePair(param, params.get(param)));
+		            }
+		            
+		            entity = new UrlEncodedFormEntity(nameValuePairs);
+		            ((UrlEncodedFormEntity)entity).setContentType(CONTENT_TYPE_FORM_URLENCODED);
+		            
+	            } else {
+	            	
+	            	entity = new StringEntity(json.toString());	            	
+	            	((StringEntity) entity).setContentType(CONTENT_TYPE_JSON);	            	
+	            }            
+                
             } catch (UnsupportedEncodingException e) {
                 e.printStackTrace();
+                return 1;
+            }
+            
+            if (httpMethod == HttpMethod.POST) {
+                ((HttpPost) request).setEntity(entity);
+            } else {
+                ((HttpPut) request).setEntity(entity);
             }
         }
 
