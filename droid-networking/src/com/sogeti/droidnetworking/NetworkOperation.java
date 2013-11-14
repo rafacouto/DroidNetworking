@@ -372,6 +372,10 @@ public class NetworkOperation implements Runnable {
     public void addParams(final Map<String, String> params) {
         this.params.putAll(params);
     }
+    
+    public void setJson(JSONObject json) {
+    	this.json = json;
+    }
 
     public void addHeaders(final Map<String, String> headers) {
         this.headers.putAll(headers);
